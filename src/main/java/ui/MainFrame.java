@@ -1,9 +1,10 @@
 package ui;
 
-import dao.CategorieDAO;
-import dao.ProdusDAO;
-import model.Categorie;
-import model.Produs;
+import entity.Categorie;
+import entity.Produs;
+import service.CategorieService;
+import service.PerformanceTestService;
+import service.ProdusService;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -26,18 +27,22 @@ public class MainFrame extends JFrame {
     private JButton btnModifica;
     private JButton btnSterge;
     private JButton btnRefresh;
+    private JButton btnTestPerformanta;
+    private JButton btnTestLeak;
+    private JButton btnEagerLoad;
 
-    private CategorieDAO categorieDAO = new CategorieDAO();
-    private ProdusDAO produsDAO = new ProdusDAO();
+    private final CategorieService categorieService = new CategorieService();
+    private final ProdusService produsService = new ProdusService();
+    private final PerformanceTestService performanceTestService = new PerformanceTestService();
 
     public MainFrame() {
-        setTitle("Magazin JDBC");
-        setSize(1200, 700);
+        setTitle("Magazin ORM - Hibernate + HikariCP");
+        setSize(1300, 750);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         initUI();
-        loadCategorii();
+        incarcaCategoriiInitial();
     }
 
     private void initUI() {
@@ -84,18 +89,26 @@ public class MainFrame extends JFrame {
         txtStoc = new JTextField();
         panelCampuri.add(txtStoc);
 
-        JPanel panelButoane = new JPanel(new GridLayout(1, 4, 10, 10));
+        JPanel panelButoane = new JPanel(new GridLayout(2, 4, 10, 10));
         panelButoane.setBorder(BorderFactory.createEmptyBorder(0, 10, 10, 10));
 
         btnAdauga = new JButton("adauga");
         btnModifica = new JButton("modifica");
         btnSterge = new JButton("sterge");
         btnRefresh = new JButton("refresh");
+        btnTestPerformanta = new JButton("test performanta");
+        btnTestLeak = new JButton("test leak");
+        btnEagerLoad = new JButton("eager load");
+        JButton btnAdaugaCategorieDemo = new JButton("adauga categorie demo");
 
         panelButoane.add(btnAdauga);
         panelButoane.add(btnModifica);
         panelButoane.add(btnSterge);
         panelButoane.add(btnRefresh);
+        panelButoane.add(btnTestPerformanta);
+        panelButoane.add(btnTestLeak);
+        panelButoane.add(btnEagerLoad);
+        panelButoane.add(btnAdaugaCategorieDemo);
 
         panelJos.add(panelCampuri, BorderLayout.NORTH);
         panelJos.add(panelButoane, BorderLayout.SOUTH);
@@ -104,9 +117,8 @@ public class MainFrame extends JFrame {
 
         tableCategorii.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
-                int row = tableCategorii.getSelectedRow();
-                if (row >= 0) {
-                    int categorieId = (int) modelCategorii.getValueAt(row, 0);
+                Integer categorieId = getSelectedCategorieId();
+                if (categorieId != null) {
                     loadProduse(categorieId);
                     clearFields();
                 }
@@ -128,14 +140,42 @@ public class MainFrame extends JFrame {
         btnModifica.addActionListener(e -> modificaProdus());
         btnSterge.addActionListener(e -> stergeProdus());
         btnRefresh.addActionListener(e -> refreshProduse());
+
+        btnTestPerformanta.addActionListener(e -> ruleazaTestPerformanta());
+        btnTestLeak.addActionListener(e -> ruleazaTestLeak());
+        btnEagerLoad.addActionListener(e -> ruleazaDemoEagerLoad());
+
+        btnAdaugaCategorieDemo.addActionListener(e -> {
+            try {
+                String nume = JOptionPane.showInputDialog(this, "numele categoriei:");
+                if (nume != null && !nume.trim().isEmpty()) {
+                    categorieService.adaugaCategorie(nume.trim());
+                    loadCategorii();
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "eroare", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+
+    private void incarcaCategoriiInitial() {
+        List<Categorie> categorii = categorieService.getAllCategorii();
+
+        if (categorii.isEmpty()) {
+            categorieService.adaugaCategorie("lactate");
+            categorieService.adaugaCategorie("dulciuri");
+            categorieService.adaugaCategorie("bauturi");
+        }
+
+        loadCategorii();
     }
 
     private void loadCategorii() {
         modelCategorii.setRowCount(0);
 
-        List<Categorie> categorii = categorieDAO.getAllCategorii();
-        for (Categorie c : categorii) {
-            modelCategorii.addRow(new Object[]{c.getId(), c.getNume()});
+        List<Categorie> categorii = categorieService.getAllCategorii();
+        for (Categorie categorie : categorii) {
+            modelCategorii.addRow(new Object[]{categorie.getId(), categorie.getNume()});
         }
 
         if (tableCategorii.getRowCount() > 0) {
@@ -146,13 +186,13 @@ public class MainFrame extends JFrame {
     private void loadProduse(int categorieId) {
         modelProduse.setRowCount(0);
 
-        List<Produs> produse = produsDAO.getProduseByCategorieId(categorieId);
-        for (Produs p : produse) {
+        List<Produs> produse = produsService.getProduseByCategorieId(categorieId);
+        for (Produs produs : produse) {
             modelProduse.addRow(new Object[]{
-                    p.getId(),
-                    p.getNume(),
-                    p.getPret(),
-                    p.getStoc()
+                    produs.getId(),
+                    produs.getNume(),
+                    produs.getPret(),
+                    produs.getStoc()
             });
         }
     }
@@ -162,7 +202,7 @@ public class MainFrame extends JFrame {
         if (row < 0) {
             return null;
         }
-        return (int) modelCategorii.getValueAt(row, 0);
+        return (Integer) modelCategorii.getValueAt(row, 0);
     }
 
     private Integer getSelectedProdusId() {
@@ -170,7 +210,7 @@ public class MainFrame extends JFrame {
         if (row < 0) {
             return null;
         }
-        return (int) modelProduse.getValueAt(row, 0);
+        return (Integer) modelProduse.getValueAt(row, 0);
     }
 
     private void adaugaProdus() {
@@ -185,23 +225,7 @@ public class MainFrame extends JFrame {
             double pret = Double.parseDouble(txtPret.getText().trim());
             int stoc = Integer.parseInt(txtStoc.getText().trim());
 
-            if (nume.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "numele nu poate fi gol", "eroare", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            if (pret <= 0) {
-                JOptionPane.showMessageDialog(this, "pretul trebuie sa fie mai mare ca 0", "eroare", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            if (stoc < 0) {
-                JOptionPane.showMessageDialog(this, "stocul nu poate fi negativ", "eroare", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            Produs produs = new Produs(0, nume, pret, stoc, categorieId);
-            produsDAO.addProdus(produs);
+            produsService.adaugaProdus(nume, pret, stoc, categorieId);
 
             loadProduse(categorieId);
             clearFields();
@@ -209,7 +233,7 @@ public class MainFrame extends JFrame {
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "pretul si stocul trebuie sa fie numere valide", "eroare", JOptionPane.ERROR_MESSAGE);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "eroare baza de date", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "eroare", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -227,23 +251,7 @@ public class MainFrame extends JFrame {
             double pret = Double.parseDouble(txtPret.getText().trim());
             int stoc = Integer.parseInt(txtStoc.getText().trim());
 
-            if (nume.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "numele nu poate fi gol", "eroare", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            if (pret <= 0) {
-                JOptionPane.showMessageDialog(this, "pretul trebuie sa fie mai mare ca 0", "eroare", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            if (stoc < 0) {
-                JOptionPane.showMessageDialog(this, "stocul nu poate fi negativ", "eroare", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
-            Produs produs = new Produs(produsId, nume, pret, stoc, categorieId);
-            produsDAO.updateProdus(produs);
+            produsService.modificaProdus(produsId, nume, pret, stoc);
 
             loadProduse(categorieId);
             clearFields();
@@ -251,7 +259,7 @@ public class MainFrame extends JFrame {
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "pretul si stocul trebuie sa fie numere valide", "eroare", JOptionPane.ERROR_MESSAGE);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, ex.getMessage(), "eroare baza de date", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "eroare", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -273,11 +281,11 @@ public class MainFrame extends JFrame {
 
         if (confirmare == JOptionPane.YES_OPTION) {
             try {
-                produsDAO.deleteProdus(produsId);
+                produsService.stergeProdus(produsId);
                 loadProduse(categorieId);
                 clearFields();
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "eroare baza de date", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "eroare", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -287,6 +295,82 @@ public class MainFrame extends JFrame {
         if (categorieId != null) {
             loadProduse(categorieId);
         }
+    }
+
+    private void ruleazaTestPerformanta() {
+        new Thread(() -> {
+            StringBuilder rezultat = new StringBuilder();
+
+            try {
+                performanceTestService.ruleazaTestConexiuni(text -> rezultat.append(text).append("\n"));
+                SwingUtilities.invokeLater(() ->
+                        afiseazaText("rezultate test performanta", rezultat.toString())
+                );
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(this, e.getMessage(), "eroare", JOptionPane.ERROR_MESSAGE)
+                );
+            }
+        }).start();
+    }
+
+    private void ruleazaTestLeak() {
+        new Thread(() -> {
+            StringBuilder rezultat = new StringBuilder();
+
+            try {
+                performanceTestService.demonstreazaConnectionLeak(text -> rezultat.append(text).append("\n"));
+                SwingUtilities.invokeLater(() ->
+                        afiseazaText("rezultate test leak", rezultat.toString())
+                );
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(this, e.getMessage(), "eroare", JOptionPane.ERROR_MESSAGE)
+                );
+            }
+        }).start();
+    }
+
+    private void ruleazaDemoEagerLoad() {
+        Integer categorieId = getSelectedCategorieId();
+        if (categorieId == null) {
+            JOptionPane.showMessageDialog(this, "selecteaza o categorie", "eroare", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        try {
+            Categorie categorie = categorieService.getCategorieWithProduse(categorieId);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("categorie: ").append(categorie.getNume()).append("\n");
+            sb.append("numar produse incarcate eager: ").append(categorie.getProduse().size()).append("\n\n");
+
+            for (Produs produs : categorie.getProduse()) {
+                sb.append(" - ")
+                        .append(produs.getNume())
+                        .append(", pret=")
+                        .append(produs.getPret())
+                        .append(", stoc=")
+                        .append(produs.getStoc())
+                        .append("\n");
+            }
+
+            afiseazaText("demo eager loading", sb.toString());
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, e.getMessage(), "eroare", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void afiseazaText(String titlu, String text) {
+        JTextArea textArea = new JTextArea(text);
+        textArea.setEditable(false);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+
+        JScrollPane scrollPane = new JScrollPane(textArea);
+        scrollPane.setPreferredSize(new Dimension(700, 400));
+
+        JOptionPane.showMessageDialog(this, scrollPane, titlu, JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void clearFields() {

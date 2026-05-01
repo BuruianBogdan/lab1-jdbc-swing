@@ -1,9 +1,15 @@
-import db.DatabaseInitializer;
+import config.HibernateUtil;
 import ui.MainFrame;
+
+import javax.swing.*;
 
 public class Main {
     public static void main(String[] args) {
-        DatabaseInitializer.initializeDatabase();
-        new MainFrame().setVisible(true);
+        SwingUtilities.invokeLater(() -> {
+            MainFrame frame = new MainFrame();
+            frame.setVisible(true);
+        });
+
+        Runtime.getRuntime().addShutdownHook(new Thread(HibernateUtil::shutdown));
     }
 }

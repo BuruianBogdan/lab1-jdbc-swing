@@ -25,4 +25,4 @@ CREATE TABLE IF NOT EXISTS produs_eticheta (
                                                PRIMARY KEY (produs_id, eticheta_id),
     FOREIGN KEY (produs_id) REFERENCES produse(id) ON DELETE CASCADE,
     FOREIGN KEY (eticheta_id) REFERENCES etichete(id) ON DELETE CASCADE
-    );
+);
