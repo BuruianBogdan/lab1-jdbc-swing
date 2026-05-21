@@ -1,12 +1,12 @@
 import config.HibernateUtil;
-import ui.MainFrame;
+import ui.Lab4Frame;
 
 import javax.swing.*;
 
 public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            MainFrame frame = new MainFrame();
+            Lab4Frame frame = new Lab4Frame();
             frame.setVisible(true);
         });
 
